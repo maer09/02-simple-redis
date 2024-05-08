@@ -1,6 +1,6 @@
 use crate::{
-    BulkString, RespArray, RespEncode, RespFrame, RespMap, RespNull, RespNullBulkString, RespSet,
-    SimpleError, SimpleString,
+    BulkString, RespArray, RespEncode, RespMap, RespNull, RespNullArray, RespNullBulkString,
+    RespSet, SimpleError, SimpleString,
 };
 
 const BUF_CAP: usize = 4096;
@@ -37,12 +37,6 @@ impl RespEncode for RespNullBulkString {
     }
 }
 
-impl RespEncode for RespFrame {
-    fn encode(self) -> Vec<u8> {
-        todo!()
-    }
-}
-
 impl RespEncode for RespArray {
     fn encode(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(BUF_CAP);
@@ -66,6 +60,13 @@ impl RespEncode for i64 {
 impl RespEncode for RespNull {
     fn encode(self) -> Vec<u8> {
         b"\r\n".to_vec()
+    }
+}
+
+// "*-1\r\n"
+impl RespEncode for RespNullArray {
+    fn encode(self) -> Vec<u8> {
+        b"*-1\r\n".to_vec()
     }
 }
 
@@ -113,5 +114,16 @@ impl RespEncode for RespSet {
             buf.extend_from_slice(&frame.encode());
         }
         buf
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_simple_string_encode() {
+        let simple_string = SimpleString::new("OK".to_string());
+        assert_eq!(simple_string.encode(), b"+OK\r\n");
     }
 }
