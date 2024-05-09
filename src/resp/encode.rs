@@ -51,7 +51,8 @@ impl RespEncode for RespArray {
 // :[<+|->]<value>\r\n
 impl RespEncode for i64 {
     fn encode(self) -> Vec<u8> {
-        let sign = if self < 0 { "-" } else { "+" };
+        // i64如果是负数，display的时候会自己加上符号-，所以这里负数时返回空字符串
+        let sign = if self < 0 { "" } else { "+" };
         format!(":{}{}\r\n", sign, self).into_bytes()
     }
 }
@@ -59,7 +60,7 @@ impl RespEncode for i64 {
 // _\r\n
 impl RespEncode for RespNull {
     fn encode(self) -> Vec<u8> {
-        b"\r\n".to_vec()
+        b"_\r\n".to_vec()
     }
 }
 
@@ -81,8 +82,8 @@ impl RespEncode for bool {
 impl RespEncode for f64 {
     fn encode(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(32);
-        let ret = if self.abs() > 1e+8 {
-            format!(",e{:+e}\r\n", self)
+        let ret = if self.abs() > 1e+8 || self.abs() < 1e-8 {
+            format!(",{:+e}\r\n", self)
         } else {
             let sign = if self < 0.0 { "" } else { "+" };
             format!(",{}{}\r\n", sign, self)
@@ -119,11 +120,113 @@ impl RespEncode for RespSet {
 
 #[cfg(test)]
 mod tests {
+    use crate::RespFrame;
+
     use super::*;
 
     #[test]
     fn test_simple_string_encode() {
-        let simple_string = SimpleString::new("OK".to_string());
-        assert_eq!(simple_string.encode(), b"+OK\r\n");
+        let frame: RespFrame = SimpleString::new("OK".to_string()).into();
+        assert_eq!(frame.encode(), b"+OK\r\n");
+    }
+
+    #[test]
+    fn test_simple_error_encode() {
+        let frame: RespFrame = SimpleError::new("Error message".to_string()).into();
+        assert_eq!(frame.encode(), b"-Error message\r\n");
+    }
+
+    #[test]
+    fn test_integer_encode() {
+        let frame: RespFrame = 123.into();
+        assert_eq!(frame.encode(), b":+123\r\n");
+        let frame: RespFrame = (-123).into();
+        assert_eq!(frame.encode(), b":-123\r\n");
+    }
+
+    #[test]
+    fn test_bulk_string_encode() {
+        let frame: RespFrame = BulkString::new(b"hello".to_vec()).into();
+        assert_eq!(frame.encode(), b"$5\r\nhello\r\n");
+    }
+
+    #[test]
+    fn test_null_bulk_string_encode() {
+        let frame: RespFrame = RespNullBulkString.into();
+        assert_eq!(frame.encode(), b"$-1\r\n");
+    }
+
+    #[test]
+    fn test_array_encode() {
+        let frame: RespFrame = RespArray::new(vec![
+            BulkString::new("set".to_string()).into(),
+            BulkString::new("hello".to_string()).into(),
+            BulkString::new("world".to_string()).into(),
+        ])
+        .into();
+        assert_eq!(
+            frame.encode(),
+            b"*3\r\n$3\r\nset\r\n$5\r\nhello\r\n$5\r\nworld\r\n"
+        );
+    }
+
+    #[test]
+    fn test_null_array_encode() {
+        let frame: RespFrame = RespNullArray.into();
+        assert_eq!(frame.encode(), b"*-1\r\n");
+    }
+
+    #[test]
+    fn test_null_encode() {
+        let frame: RespFrame = RespNull.into();
+        assert_eq!(frame.encode(), b"_\r\n");
+    }
+
+    #[test]
+    fn test_boolean_encode() {
+        let frame: RespFrame = true.into();
+        assert_eq!(frame.encode(), b"#t\r\n");
+        let frame: RespFrame = false.into();
+        assert_eq!(frame.encode(), b"#f\r\n");
+    }
+
+    #[test]
+    fn test_double_encode() {
+        let frame: RespFrame = 123.456.into();
+        assert_eq!(frame.encode(), b",+123.456\r\n");
+        let frame: RespFrame = (-123.456).into();
+        assert_eq!(frame.encode(), b",-123.456\r\n");
+        let frame: RespFrame = 1.23456e+8.into();
+        assert_eq!(frame.encode(), b",+1.23456e8\r\n");
+        let frame: RespFrame = (-1.23456e-9).into();
+        assert_eq!(frame.encode(), b",-1.23456e-9\r\n");
+    }
+
+    #[test]
+    fn test_map_encode() {
+        let mut map = RespMap::new();
+        map.insert(
+            "hello".to_string(),
+            BulkString::new("world".to_string()).into(),
+        );
+        map.insert("foo".to_string(), (-123456.789).into());
+        let frame: RespFrame = map.into();
+        assert_eq!(
+            frame.encode(),
+            b"%2\r\n+foo\r\n,-123456.789\r\n+hello\r\n$5\r\nworld\r\n"
+        );
+    }
+
+    #[test]
+    fn test_set_encode() {
+        let frame: RespFrame = RespSet::new([
+            RespArray::new([1234.into(), true.into()]).into(),
+            BulkString::new("world".to_string()).into(),
+        ])
+        .into();
+        assert_eq!(
+            frame.encode(),
+            b"~2\r\n*2\r\n:+1234\r\n#t\r\n$5\r\nworld\r\n"
+        );
     }
 }

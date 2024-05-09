@@ -2,8 +2,8 @@ mod decode;
 mod encode;
 
 use enum_dispatch::enum_dispatch;
-use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
+use std::collections::BTreeMap;
+use std::ops::{Deref, DerefMut};
 
 #[enum_dispatch]
 pub trait RespEncode {
@@ -15,6 +15,7 @@ pub trait RespDecode {
 }
 
 #[enum_dispatch(RespEncode)]
+#[derive(Debug, PartialEq)]
 pub enum RespFrame {
     SimpleString(SimpleString),
     Error(SimpleError),
@@ -31,15 +32,24 @@ pub enum RespFrame {
     Set(RespSet),
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct SimpleString(String);
+#[derive(Debug, PartialEq, Eq)]
 pub struct SimpleError(String);
+#[derive(Debug, PartialEq, Eq)]
 pub struct BulkString(Vec<u8>);
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNull;
+#[derive(Debug, PartialEq)]
 pub struct RespArray(Vec<RespFrame>);
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNullArray;
+#[derive(Debug, PartialEq, Eq)]
 pub struct RespNullBulkString;
-pub struct RespMap(HashMap<String, RespFrame>);
-pub struct RespSet(HashSet<RespFrame>);
+#[derive(Debug, PartialEq)]
+pub struct RespMap(BTreeMap<String, RespFrame>);
+#[derive(Debug, PartialEq)]
+pub struct RespSet(Vec<RespFrame>);
 
 impl Deref for SimpleString {
     type Target = String;
@@ -74,15 +84,21 @@ impl Deref for RespArray {
 }
 
 impl Deref for RespMap {
-    type Target = HashMap<String, RespFrame>;
+    type Target = BTreeMap<String, RespFrame>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
+impl DerefMut for RespMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl Deref for RespSet {
-    type Target = HashSet<RespFrame>;
+    type Target = Vec<RespFrame>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -95,68 +111,38 @@ impl SimpleString {
     }
 }
 
-// impl From<SimpleString> for RespFrame {
-//     fn from(value: SimpleString) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl SimpleError {
+    pub fn new(s: impl Into<String>) -> Self {
+        SimpleError(s.into())
+    }
+}
 
-// impl From<SimpleError> for RespFrame {
-//     fn from(value: SimpleError) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl BulkString {
+    pub fn new(s: impl Into<Vec<u8>>) -> Self {
+        BulkString(s.into())
+    }
+}
 
-// impl From<i64> for RespFrame {
-//     fn from(value: i64) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl RespArray {
+    pub fn new(s: impl Into<Vec<RespFrame>>) -> Self {
+        RespArray(s.into())
+    }
+}
 
-// impl From<BulkString> for RespFrame {
-//     fn from(value: BulkString) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl RespMap {
+    pub fn new() -> Self {
+        RespMap(BTreeMap::new())
+    }
+}
 
-// impl From<RespNullBulkString> for RespFrame {
-//     fn from(value: RespNullBulkString) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl Default for RespMap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-// impl From<RespArray> for RespFrame {
-//     fn from(value: RespArray) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-// impl From<RespNull> for RespFrame {
-//     fn from(value: RespNull) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-// impl From<RespNullArray> for RespFrame {
-//     fn from(value: RespNullArray) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-// impl From<bool> for RespFrame {
-//     fn from(value: bool) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-// impl From<RespMap> for RespFrame {
-//     fn from(value: RespMap) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
-
-// impl From<RespSet> for RespFrame {
-//     fn from(value: RespSet) -> Self {
-//         RespFrame::SimpleString(value)
-//     }
-// }
+impl RespSet {
+    pub fn new(s: impl Into<Vec<RespFrame>>) -> Self {
+        RespSet(s.into())
+    }
+}
